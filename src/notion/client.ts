@@ -74,7 +74,7 @@ export async function publishToNotion(payload: PublishPayload): Promise<string> 
       properties: { title: { title: [{ text: { content: payload.titulo } }] } },
       children: buildNotionBlocks(payload),
     });
-    return page.url;
+    return `https://notion.so/${page.id.replace(/-/g, "")}`;
   } catch (err: any) {
     throw new NotionError(`Falha ao publicar no Notion: ${err.message}`);
   }
