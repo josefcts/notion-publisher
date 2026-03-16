@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/publish.ts": {
+      "maxDuration": 30
+    }
+  }
+}
