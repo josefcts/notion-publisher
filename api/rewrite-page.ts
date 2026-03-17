@@ -17,13 +17,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   if (!page_id || !blocks?.length) { res.status(400).json({ error: 'page_id e blocks sao obrigatorios' }); return; }
 
   try {
-    // 1. Deleta todos os blocos existentes
-    const existing = await notion.blocks.children.list({ block_id: page_id, page_size: 100 });
-    for (const b of existing.results) {
-      try { await notion.blocks.delete({ block_id: b.id }); } catch {}
+    // Loop de limpeza — deleta até não sobrar nada
+    let hasMore = true;
+    while (hasMore) {
+      const existing = await notion.blocks.children.list({ block_id: page_id, page_size: 100 });
+      if (!existing.results.length) { hasMore = false; break; }
+      for (const b of existing.results) {
+        try { await notion.blocks.delete({ block_id: b.id }); } catch {}
+      }
+      hasMore = existing.has_more;
     }
 
-    // 2. Insere novos blocos em chunks de 40
+    // Insere novos blocos em chunks de 40
     const chunkSize = 40;
     for (let i = 0; i < blocks.length; i += chunkSize) {
       await notion.blocks.children.append({ block_id: page_id, children: blocks.slice(i, i + chunkSize) });
