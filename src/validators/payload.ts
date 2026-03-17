@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const ImagemSchema = z.object({
-  url: z.string(),
+  url: z.string().url(),
   legenda: z.string().optional(),
 });
 
@@ -17,6 +17,8 @@ export const PublishPayloadSchema = z.object({
   materia: z.string(),
   semestre: z.number().int().min(1).max(10),
   resumo: z.string(),
+  diagrama: z.string().optional(),
+  mapa_mental: z.string().optional(),
   topicos: z.array(TopicoSchema),
   tabela: z.array(z.record(z.string())).optional(),
   pontos_de_prova: z.array(z.string()).optional(),
