@@ -4,32 +4,37 @@ import { PublishPayload } from '../validators/payload';
 
 const notion = new Client({ auth: process.env.NOTION_TOKEN });
 
-async function getOrCreateSemesterPage(rootPageId: string, semestre: number): Promise<string> {
-  const title = `${semestre}º Semestre`;
-  const children = await notion.blocks.children.list({ block_id: rootPageId });
+const SEMESTER_ICONS: Record<number, string> = {
+  1: '📗', 2: '📘', 3: '📙', 4: '📕', 5: '📒',
+  6: '📔', 7: '📓', 8: '📃', 9: '📄', 10: '🎓',
+};
+
+const MATERIA_ICONS: Record<string, string> = {
+  'Fisiopatologia dos Principais Agravos à Saúde II': '🦠',
+  'Fisiopatologia dos Principais Agravos à Saúde I': '🫀',
+  'Treinamento de Habilidades Odontológicas II': '🔧',
+  'Treinamento de Habilidades Odontológicas III': '🔧',
+  'Estágio de Prevenção e Prática Clínica II': '🏫',
+  'Estágio de Clínica Odontológica': '🏥',
+  'Homem, Cultura e Sociedade': '🌍',
+  'Farmacoterapia Odontológica': '💊',
+  'Patologia Geral': '🔬',
+  'Anatomia Humana': '🦴',
+};
+
+async function getOrCreatePage(parentId: string, title: string, icon?: string): Promise<string> {
+  const children = await notion.blocks.children.list({ block_id: parentId });
   for (const block of children.results) {
     if (isFullBlock(block) && block.type === 'child_page' && block.child_page.title === title) {
       return block.id;
     }
   }
-  const newPage = await notion.pages.create({
-    parent: { page_id: rootPageId },
+  const pageBody: any = {
+    parent: { page_id: parentId },
     properties: { title: { title: [{ text: { content: title } }] } },
-  });
-  return newPage.id;
-}
-
-async function getOrCreateMateriaPage(semesterPageId: string, materia: string): Promise<string> {
-  const children = await notion.blocks.children.list({ block_id: semesterPageId });
-  for (const block of children.results) {
-    if (isFullBlock(block) && block.type === 'child_page' && block.child_page.title === materia) {
-      return block.id;
-    }
-  }
-  const newPage = await notion.pages.create({
-    parent: { page_id: semesterPageId },
-    properties: { title: { title: [{ text: { content: materia } }] } },
-  });
+  };
+  if (icon) pageBody.icon = { type: 'emoji', emoji: icon };
+  const newPage = await notion.pages.create(pageBody);
   return newPage.id;
 }
 
@@ -65,16 +70,22 @@ function buildNotionBlocks(payload: PublishPayload): any[] {
 
 export async function publishToNotion(payload: PublishPayload): Promise<string> {
   const rootPageId = process.env.NOTION_ROOT_PAGE_ID;
-  if (!rootPageId) throw new NotionError('NOTION_ROOT_PAGE_ID não configurado');
+  if (!rootPageId) throw new NotionError('NOTION_ROOT_PAGE_ID nao configurado');
   try {
-    const semesterPageId = await getOrCreateSemesterPage(rootPageId, payload.semestre);
-    const materiaPageId = await getOrCreateMateriaPage(semesterPageId, payload.materia);
+    const semIcon = SEMESTER_ICONS[payload.semestre] || '📁';
+    const semTitle = `${payload.semestre}º Semestre`;
+    const materiaIcon = MATERIA_ICONS[payload.materia] || '📖';
+
+    const semesterPageId = await getOrCreatePage(rootPageId, semTitle, semIcon);
+    const materiaPageId = await getOrCreatePage(semesterPageId, payload.materia, materiaIcon);
+
     const page = await notion.pages.create({
       parent: { page_id: materiaPageId },
       properties: { title: { title: [{ text: { content: payload.titulo } }] } },
+      icon: { type: 'emoji', emoji: '📄' },
       children: buildNotionBlocks(payload),
     });
-    return `https://notion.so/${page.id.replace(/-/g, "")}`;
+    return page.url;
   } catch (err: any) {
     throw new NotionError(`Falha ao publicar no Notion: ${err.message}`);
   }
