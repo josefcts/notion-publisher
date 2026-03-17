@@ -31,21 +31,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       cursor = page.has_more ? page.next_cursor : undefined;
     } while (cursor);
 
-    // 2. Deleta todos exceto child_page — ignora erros de bloco arquivado
+    // 2. Deleta tudo exceto child_page — ignora arquivados e erros
     let deleted = 0;
     for (const b of allBlocks) {
       if (b.type === 'child_page') continue;
-      if (b.archived || b.in_trash) continue; // já arquivado, ignora
+      if (b.archived === true || b.in_trash === true) continue;
       try {
         await notion.blocks.delete({ block_id: b.id });
         deleted++;
       } catch (e: any) {
-        // ignora erro de bloco já arquivado
-        if (!e.message?.includes('archived')) throw e;
+        if (e.message?.includes('archived') || e.message?.includes('trash')) continue;
+        throw e;
       }
     }
 
-    // 3. Insere os novos blocos em chunks de 50
+    // 3. Insere novos blocos em chunks de 50
     const chunkSize = 50;
     for (let i = 0; i < blocks.length; i += chunkSize) {
       await notion.blocks.children.append({ block_id: rootPageId, children: blocks.slice(i, i + chunkSize) });
