@@ -18,7 +18,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const rootPageId = process.env.NOTION_ROOT_PAGE_ID;
   if (!rootPageId) { res.status(500).json({ error: 'NOTION_ROOT_PAGE_ID nao configurado' }); return; }
 
-  // Recebe a lista completa de blocos para substituir
   const { blocks } = req.body;
   if (!blocks?.length) { res.status(400).json({ error: 'blocks array obrigatorio' }); return; }
 
@@ -32,22 +31,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       cursor = page.has_more ? page.next_cursor : undefined;
     } while (cursor);
 
-    // 2. Deleta todos (exceto child_page — mantém as sub-páginas criadas)
+    // 2. Deleta todos exceto child_page — ignora erros de bloco arquivado
+    let deleted = 0;
     for (const b of allBlocks) {
-      if (b.type !== 'child_page') {
+      if (b.type === 'child_page') continue;
+      if (b.archived || b.in_trash) continue; // já arquivado, ignora
+      try {
         await notion.blocks.delete({ block_id: b.id });
+        deleted++;
+      } catch (e: any) {
+        // ignora erro de bloco já arquivado
+        if (!e.message?.includes('archived')) throw e;
       }
     }
 
-    // 3. Insere os novos blocos
-    // Notion tem limite de 100 blocos por request — divide em chunks
+    // 3. Insere os novos blocos em chunks de 50
     const chunkSize = 50;
     for (let i = 0; i < blocks.length; i += chunkSize) {
-      const chunk = blocks.slice(i, i + chunkSize);
-      await notion.blocks.children.append({ block_id: rootPageId, children: chunk });
+      await notion.blocks.children.append({ block_id: rootPageId, children: blocks.slice(i, i + chunkSize) });
     }
 
-    res.status(200).json({ success: true, deleted: allBlocks.filter(b => b.type !== 'child_page').length, added: blocks.length });
+    res.status(200).json({ success: true, deleted, added: blocks.length });
   } catch (err: any) {
     if (err instanceof NotionError) { res.status(502).json({ error: err.message }); return; }
     console.error('[replace-root] erro:', err);
