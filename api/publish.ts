@@ -9,9 +9,7 @@ function validateApiKey(req: VercelRequest): boolean {
 }
 
 async function triggerIndexUpdate(titulo: string, materia: string, semestre: number, pageUrl: string): Promise<void> {
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'https://notion-publisher-plum.vercel.app';
+  const baseUrl = 'https://notion-publisher-plum.vercel.app';
   try {
     await fetch(`${baseUrl}/api/update-index`, {
       method: 'POST',
