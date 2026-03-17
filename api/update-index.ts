@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Client } from '@notionhq/client';
 import { NotionError } from '../src/errors';
+import { setCorsHeaders, handleOptions } from '../src/cors';
 
 function validateApiKey(req: VercelRequest): boolean {
   return req.headers['x-api-key'] === process.env.PUBLISHER_API_KEY;
@@ -8,13 +9,7 @@ function validateApiKey(req: VercelRequest): boolean {
 
 const notion = new Client({ auth: process.env.NOTION_TOKEN });
 
-interface IndexEntry {
-  titulo: string;
-  materia: string;
-  semestre: number;
-  pageUrl: string;
-  data: string;
-}
+interface IndexEntry { titulo: string; materia: string; semestre: number; pageUrl: string; data: string; }
 
 async function updateIndex(entry: IndexEntry): Promise<void> {
   const rootPageId = process.env.NOTION_ROOT_PAGE_ID;
@@ -39,31 +34,28 @@ async function updateIndex(entry: IndexEntry): Promise<void> {
 
   await notion.blocks.children.append({
     block_id: rootPageId,
-    children: [
-      {
-        object: 'block',
-        type: 'callout',
-        callout: {
-          rich_text: [
-            { type: 'text', text: { content: `📄 ${entry.semestre}º Sem → ${entry.materia} → ` }, annotations: { bold: false, color: 'default' } },
-            { type: 'text', text: { content: entry.titulo, link: { url: entry.pageUrl } }, annotations: { bold: true, color: 'blue' } },
-            { type: 'text', text: { content: ` • ${entry.data}` }, annotations: { color: 'gray' } },
-          ],
-          icon: { type: 'emoji', emoji: '✅' },
-          color: 'green_background',
-        },
-      } as any,
-    ],
+    children: [{
+      object: 'block', type: 'callout',
+      callout: {
+        rich_text: [
+          { type: 'text', text: { content: `📄 ${entry.semestre}º Sem → ${entry.materia} → ` }, annotations: { bold: false, color: 'default' } },
+          { type: 'text', text: { content: entry.titulo, link: { url: entry.pageUrl } }, annotations: { bold: true, color: 'blue' } },
+          { type: 'text', text: { content: ` • ${entry.data}` }, annotations: { color: 'gray' } },
+        ],
+        icon: { type: 'emoji', emoji: '✅' },
+        color: 'green_background',
+      },
+    } as any],
   });
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  setCorsHeaders(res);
+  if (handleOptions(res)) return;
   if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return; }
   if (!validateApiKey(req)) { res.status(401).json({ error: 'Unauthorized' }); return; }
   const { titulo, materia, semestre, pageUrl, data } = req.body;
-  if (!titulo || !materia || !semestre || !pageUrl) {
-    res.status(400).json({ error: 'titulo, materia, semestre e pageUrl sao obrigatorios' }); return;
-  }
+  if (!titulo || !materia || !semestre || !pageUrl) { res.status(400).json({ error: 'campos obrigatorios faltando' }); return; }
   try {
     await updateIndex({ titulo, materia, semestre, pageUrl, data: data || new Date().toLocaleDateString('pt-BR') });
     res.status(200).json({ success: true });
