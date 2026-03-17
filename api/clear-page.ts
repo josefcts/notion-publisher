@@ -18,16 +18,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
   try {
     let deleted = 0;
-    let hasMore = true;
-    while (hasMore) {
-      const existing = await notion.blocks.children.list({ block_id: page_id, page_size: 100 });
-      if (!existing.results.length) break;
-      for (const b of existing.results as any[]) {
-        if (b.archived || b.in_trash) continue;
-        try { await notion.blocks.delete({ block_id: b.id }); deleted++; } catch {}
-      }
-      hasMore = existing.has_more;
-    }
+    // Lê todos de uma vez
+    const all: any[] = [];
+    let cursor: string | undefined;
+    do {
+      const page: any = await notion.blocks.children.list({ block_id: page_id, page_size: 100, start_cursor: cursor });
+      all.push(...page.results);
+      cursor = page.has_more ? page.next_cursor : undefined;
+    } while (cursor);
+
+    // Deleta em paralelo — muito mais rápido que serial
+    const toDelete = all.filter((b: any) => b.type !== 'child_page' && !b.archived && !b.in_trash);
+    await Promise.all(toDelete.map((b: any) =>
+      notion.blocks.delete({ block_id: b.id }).catch(() => {})
+    ));
+    deleted = toDelete.length;
+
     res.status(200).json({ success: true, deleted });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
