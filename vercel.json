@@ -1,7 +1,8 @@
 {
+  "version": 2,
   "functions": {
-    "api/publish.ts": {
-      "maxDuration": 30
+    "api/**": {
+      "maxDuration": 60
     }
   }
 }
